@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RideShare- easy route</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero-section">
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-copy fade-up">
+          <div class="hero-eyebrow">Now live in your city</div>
+          <h1 class="hero-title">Commute <span class="highlight">Smarter,</span><br/>Together.</h1>
+          <p class="hero-subtitle">Join thousands of commuters sharing rides, splitting costs, and cutting emissions — one trip at a time.</p>
+          <div class="hero-actions">
+            <a id="home-primary-action" href="/pages/signup.html" class="button primary-button btn-lg">Get Started Free</a>
+            <a id="home-secondary-action" href="/pages/login.html" class="button ghost-button btn-lg">Sign In</a>
+          </div>
+          <div class="trust-row">
+            <div class="trust-item"><span class="trust-number">12K+</span><span class="trust-label">Rides Shared</span></div>
+            <div class="trust-item"><span class="trust-number">4.9★</span><span class="trust-label">Avg Rating</span></div>
+            <div class="trust-item"><span class="trust-number">60%</span><span class="trust-label">Cost Saved</span></div>
+          </div>
+        </div>
+        <div class="hero-widget fade-up delay-2">
+          <h3>Quick Ride Search</h3>
+          <div class="quick-search">
+            <input type="text" id="qs-from" placeholder="📍 Leaving from…" />
+            <input type="text" id="qs-to" placeholder="🏁 Going to…" />
+            <input type="date" id="qs-date" />
+            <button class="button primary-button full-width btn-lg" onclick="quickSearch()">Search Rides →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features-section">
+    <div class="container">
+      <div class="section-heading fade-up">
+        <span class="eyebrow">Why RideShare</span>
+        <h2>Built for modern commuters</h2>
+        <p>Everything you need for safe, reliable, affordable daily travel.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card fade-up delay-1">
+          <div class="feature-icon">🛡️</div>
+          <h3>Verified Members</h3>
+          <p>Every driver and passenger is verified. Ride with confidence every time.</p>
+        </div>
+        <div class="feature-card fade-up delay-2">
+          <div class="feature-icon">💸</div>
+          <h3>Save Up to 60%</h3>
+          <p>Split fuel, tolls, and parking. Keep more money in your pocket.</p>
+        </div>
+        <div class="feature-card fade-up delay-3">
+          <div class="feature-icon">🌿</div>
+          <h3>Eco-Friendly</h3>
+          <p>Fewer cars on the road means less CO₂ and a healthier planet.</p>
+        </div>
+        <div class="feature-card fade-up delay-4">
+          <div class="feature-icon">⚡</div>
+          <h3>Instant Booking</h3>
+          <p>Find and book rides in seconds. No phone calls, no waiting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-inner fade-up">
+        <h2>Got a spare seat?</h2>
+        <p>Turn your daily commute into extra income. Post a ride in under a minute.</p>
+        <a id="cta-action" href="/pages/signup.html" class="button primary-button btn-lg">Start Offering Rides</a>
+      </div>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      buildNav(auth, 'home');
+      // Update CTAs based on auth state
+      const pa = document.getElementById('home-primary-action');
+      const sa = document.getElementById('home-secondary-action');
+      const cta = document.getElementById('cta-action');
+      if (auth.isAuth) {
+        if (auth.userType === 'driver') {
+          pa.href = '/pages/dashboard.html'; pa.textContent = 'Go to Dashboard';
+          sa.href = '/pages/offer-ride.html'; sa.textContent = 'Offer a Ride';
+          if (cta) { cta.href = '/pages/offer-ride.html'; cta.textContent = 'Offer a Ride Now'; }
+        } else {
+          pa.href = '/pages/passenger-dashboard.html'; pa.textContent = 'Go to Dashboard';
+          sa.href = '/pages/search-ride.html'; sa.textContent = 'Find Rides';
+          if (cta) { cta.href = '/pages/search-ride.html'; cta.textContent = 'Find a Ride'; }
+        }
+      }
+      // Set quick search date to today
+      document.getElementById('qs-date').valueAsDate = new Date();
+
+      // Validate token silently
+      auth.validateToken().then(v => {
+        if (!v && auth.isAuth) { auth.logout(); }
+      });
+    });
+
+    function quickSearch() {
+      const from = document.getElementById('qs-from').value;
+      const to = document.getElementById('qs-to').value;
+      const date = document.getElementById('qs-date').value;
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (date) params.set('date', date);
+      window.location.href = `/pages/search-ride.html?${params}`;
+    }
+  </script>
+</body>
+</html>

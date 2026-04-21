@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin Dashboard — RideShare</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="admin-nav-section">
+        <h2>Dashboard</h2>
+        <a class="admin-nav-link active" href="/pages/admin/dashboard.html">📊 Analytics</a>
+      </div>
+      <div class="admin-nav-section">
+        <h2>Management</h2>
+        <a class="admin-nav-link" href="/pages/admin/users.html">👥 Users</a>
+        <a class="admin-nav-link" href="/pages/admin/rides.html">🚗 Rides</a>
+        <a class="admin-nav-link" href="/pages/admin/bookings.html">🎫 Bookings</a>
+      </div>
+      <div class="admin-nav-section">
+        <h2>Moderation</h2>
+        <a class="admin-nav-link" href="/pages/admin/reports.html">🚩 Reports</a>
+      </div>
+    </div>
+
+    <div class="admin-content">
+      <div class="page-header fade-up">
+        <h1>Platform Analytics</h1>
+        <p>Real-time overview of your carpooling platform.</p>
+      </div>
+
+      <!-- Key Stats -->
+      <div class="stats-row fade-up delay-1" id="key-stats">
+        <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="stat-users">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active Rides</div><div class="stat-value" id="stat-active-rides">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pending Bookings</div><div class="stat-value" id="stat-pending-books">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="stat-revenue">—</div></div>
+      </div>
+
+      <!-- User Breakdown -->
+      <div class="card fade-up delay-2 mb-3">
+        <h3>User Breakdown</h3>
+        <div class="stats-row" id="user-stats">
+          <div class="stat-card"><div class="stat-label">Drivers</div><div class="stat-value" id="stat-drivers">—</div></div>
+          <div class="stat-card"><div class="stat-label">Passengers</div><div class="stat-value" id="stat-passengers">—</div></div>
+          <div class="stat-card"><div class="stat-label">Banned</div><div class="stat-value" id="stat-banned">—</div></div>
+          <div class="stat-card"><div class="stat-label">New This Month</div><div class="stat-value" id="stat-new-users">—</div></div>
+        </div>
+      </div>
+
+      <!-- Ride Stats -->
+      <div class="card fade-up delay-3 mb-3">
+        <h3>Ride Statistics</h3>
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">Total Rides</div><div class="stat-value" id="stat-total-rides">—</div></div>
+          <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value" id="stat-completed-rides">—</div></div>
+          <div class="stat-card"><div class="stat-label">Cancelled</div><div class="stat-value" id="stat-cancelled-rides">—</div></div>
+          <div class="stat-card"><div class="stat-label">New This Month</div><div class="stat-value" id="stat-new-rides">—</div></div>
+        </div>
+      </div>
+
+      <!-- Monthly Revenue Chart -->
+      <div class="card fade-up delay-4 mb-3">
+        <h3>Monthly Revenue (Last 6 Months)</h3>
+        <div class="chart-bar-wrap" id="revenue-chart" style="min-height:160px">
+          <div class="chart-bar-col" style="flex:1"><div class="chart-bar" style="height:40%"></div><div class="chart-label">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- Booking Status Breakdown -->
+      <div class="card fade-up delay-5">
+        <h3>Booking Status Distribution</h3>
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="stat-total-books">—</div></div>
+          <div class="stat-card"><div class="stat-label">Confirmed</div><div class="stat-value" id="stat-conf-books">—</div></div>
+          <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" id="stat-pend-books">—</div></div>
+          <div class="stat-card"><div class="stat-label">Pending Reports</div><div class="stat-value" id="stat-reports">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAdmin()) return;
+      buildNav(auth, 'admin-dashboard');
+      await loadStats();
+      setInterval(loadStats, 30000); // Refresh every 30s
+    });
+
+    async function loadStats() {
+      try {
+        const data = await auth.api('/api/admin/stats');
+        
+        // Key stats
+        document.getElementById('stat-users').textContent = data.users.total;
+        document.getElementById('stat-active-rides').textContent = data.rides.active;
+        document.getElementById('stat-pending-books').textContent = data.bookings.pending;
+        document.getElementById('stat-revenue').textContent = fmtCur(data.finance.totalRevenue);
+
+        // Users
+        document.getElementById('stat-drivers').textContent = data.users.drivers;
+        document.getElementById('stat-passengers').textContent = data.users.passengers;
+        document.getElementById('stat-banned').textContent = data.users.banned;
+        document.getElementById('stat-new-users').textContent = data.users.newThisMonth;
+
+        // Rides
+        document.getElementById('stat-total-rides').textContent = data.rides.total;
+        document.getElementById('stat-completed-rides').textContent = data.rides.completed;
+        document.getElementById('stat-cancelled-rides').textContent = data.rides.cancelled;
+        document.getElementById('stat-new-rides').textContent = data.rides.newThisMonth;
+
+        // Bookings
+        document.getElementById('stat-total-books').textContent = data.bookings.total;
+        document.getElementById('stat-conf-books').textContent = data.bookings.confirmed;
+        document.getElementById('stat-pend-books').textContent = data.bookings.pending;
+        document.getElementById('stat-reports').textContent = data.reports.pending;
+
+        // Revenue Chart
+        const chart = document.getElementById('revenue-chart');
+        const months = data.charts.monthlyRevenue || [];
+        if (months.length > 0) {
+          const maxRev = Math.max(...months.map(m => m.revenue));
+          chart.innerHTML = months.map(m => `
+            <div class="chart-bar-col">
+              <div class="chart-bar" style="height:${(m.revenue/maxRev)*100}%;"></div>
+              <div class="chart-label">${new Date(m._id.year,m._id.month-1).toLocaleDateString('en-US',{month:'short'})}</div>
+            </div>
+          `).join('');
+        }
+      } catch (e) { toast.error('Failed to load stats: ' + e.message); }
+    }
+  </script>
+</body>
+</html>

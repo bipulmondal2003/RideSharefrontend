@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home - Carpooling Platform</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button id="brand-button" class="button brand-button" type="button" onclick="window.location.href='/index.html'">Carpool App</button>
+      <!-- <h1>SilkRide</h1> -->
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links">
+        <button id="theme-toggle" class="button toggle-button" type="button">Light</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page-grid">
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <span class="eyebrow">SilkRide</span>
+        <h1>Ride Together,<br /><span>Save Better.</span></h1>
+        <p>Join the smart community of commuters. Reduce your carbon footprint, share costs, and make new friends on your daily journey.</p>
+        <div class="hero-actions">
+          <a id="home-primary-action" class="button primary-button" href="/pages/signup.html">Get Started</a>
+          <a id="home-secondary-action" class="button secondary-button" href="/pages/login.html">How it works</a>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-header">
+          <div>
+            <p>Leaving From</p>
+            <strong>Source</strong>
+          </div>
+          <div>
+            <p>Going To</p>
+            <strong>Destination</strong>
+          </div>
+        </div>
+        <div class="hero-card-body">
+          <div class="input-chip">
+            <span>Source</span>
+          </div>
+          <div class="input-chip">
+            <span>Dest</span>
+          </div>
+          <div class="input-chip">
+            <span>Today</span>
+          </div>
+          <button class="button search-button">Search</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-panel">
+      <div class="feature-primary">
+        <h3>Real-time Tracking</h3>
+        <p>Never miss a ride with precise GPS tracking and ETA notifications for every trip.</p>
+        <span class="status-pill">Active Tracking Enabled</span>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>Verified Members</h4>
+          <p>Every driver and passenger goes through a rigorous verification process.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Cost Efficient</h4>
+          <p>Save up to 60% on fuel and parking fees with shared rides.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Eco-Friendly</h4>
+          <p>Join the green movement and reduce CO₂ emissions.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Social Hub</h4>
+          <p>Meet like-minded professionals in your area.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="rides-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Available Rides Near You</h2>
+          <p>Popular destinations from your location</p>
+        </div>
+        <a href="/pages/login.html" class="button link-button">View All</a>
+      </div>
+      <div class="ride-grid">
+        <article class="ride-card">
+          <div class="ride-card-top">
+            <div>
+              <p class="ride-price">$12.50</p>
+              <p class="ride-per-seat">per seat</p>
+            </div>
+            <div class="ride-rating">4.9 ★</div>
+          </div>
+          <h3>Downtown Tech Hub</h3>
+          <p>Riverside Corporate Center</p>
+          <div class="ride-meta">
+            <span>2 seats left</span>
+          </div>
+          <button class="button ghost-button">Book Now</button>
+        </article>
+        <article class="ride-card">
+          <div class="ride-card-top">
+            <div>
+              <p class="ride-price">$8.00</p>
+              <p class="ride-per-seat">per seat</p>
+            </div>
+            <div class="ride-rating">5.0 ★</div>
+          </div>
+          <h3>Suburban Square</h3>
+          <p>Main Station</p>
+          <div class="ride-meta">
+            <span>3 seats left</span>
+          </div>
+          <button class="button ghost-button">Book Now</button>
+        </article>
+        <article class="ride-card">
+          <div class="ride-card-top">
+            <div>
+              <p class="ride-price">$15.20</p>
+              <p class="ride-per-seat">per seat</p>
+            </div>
+            <div class="ride-rating">4.8 ★</div>
+          </div>
+          <h3>North Valley Plaza</h3>
+          <p>Airport Terminal 2</p>
+          <div class="ride-meta">
+            <span>1 seat left</span>
+          </div>
+          <button class="button ghost-button">Book Now</button>
+        </article>
+      </div>
+    </section>
+
+    <section class="cta-panel">
+      <h2>Got a spare seat?</h2>
+      <p>Offer a ride and earn extra income while helping your community stay connected.</p>
+      <a href="/pages/signup.html" class="button primary-button">Offer a Ride</a>
+    </section>
+  </main>
+
+  <script>
+    // Authentication state management
+    class AuthManager {
+      constructor() {
+        this.token = localStorage.getItem('token');
+        this.user = JSON.parse(localStorage.getItem('user') || 'null');
+        this.init();
+      }
+
+      init() {
+        this.updateNavbar();
+        this.updateHomeActions();
+        this.setupEventListeners();
+      }
+
+      isAuthenticated() {
+        return !!(this.token && this.user);
+      }
+
+      getUserType() {
+        return this.user?.userType || null;
+      }
+
+      login(token, user) {
+        this.token = token;
+        this.user = user;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        this.updateNavbar();
+      }
+
+      logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        this.updateNavbar();
+        window.location.href = '/index.html';
+      }
+
+      updateNavbar() {
+        const navLinks = document.getElementById('nav-links');
+
+        if (this.isAuthenticated()) {
+          if (this.getUserType() === 'driver') {
+            navLinks.innerHTML = `
+              <a href="/pages/dashboard.html">Dashboard</a>
+              <a href="/pages/offer-ride.html">Offer Ride</a>
+              <a href="/pages/my-rides.html">My Rides</a>
+              <a href="/pages/search-ride.html">Search Rides</a>
+              <a href="/pages/profile.html">Profile</a>
+              <button id="logout-btn" class="button outline-button">Logout</button>
+              <button id="theme-toggle" class="button toggle-button" type="button">Light</button>
+            `;
+          } else if (this.getUserType() === 'passenger') {
+            navLinks.innerHTML = `
+              <a href="/pages/search-ride.html">Search Rides</a>
+              <a href="/pages/my-bookings.html">My Bookings</a>
+              <a href="/pages/profile.html">Profile</a>
+              <button id="logout-btn" class="button outline-button">Logout</button>
+              <button id="theme-toggle" class="button toggle-button" type="button">Light</button>
+            `;
+          }
+          // Add logout event listener
+          const logoutBtn = document.getElementById('logout-btn');
+          if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.logout());
+          }
+        } else {
+          navLinks.innerHTML = `
+            <a href="/pages/login.html">Login</a>
+            <a href="/pages/signup.html">Signup</a>
+            <button id="theme-toggle" class="button toggle-button" type="button">Light</button>
+          `;
+        }
+
+        setupThemeToggle();
+      }
+
+      setupEventListeners() {
+        this.updateHomeActions();
+
+        // Mobile menu toggle
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        const navLinks = document.getElementById('nav-links');
+        if (mobileMenuToggle && navLinks) {
+          mobileMenuToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+          });
+
+          // Close mobile menu when clicking a link
+          navLinks.addEventListener('click', (e) => {
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+              navLinks.classList.remove('active');
+            }
+          });
+        }
+      }
+
+      updateHomeActions() {
+        const primaryAction = document.getElementById('home-primary-action');
+        const secondaryAction = document.getElementById('home-secondary-action');
+
+        if (!primaryAction || !secondaryAction) return;
+
+        if (this.isAuthenticated()) {
+          if (this.getUserType() === 'driver') {
+            primaryAction.href = '/pages/dashboard.html';
+            primaryAction.textContent = 'Go to Dashboard';
+            secondaryAction.href = '/pages/offer-ride.html';
+            secondaryAction.textContent = 'Offer Ride';
+          } else if (this.getUserType() === 'passenger') {
+            primaryAction.href = '/pages/passenger-dashboard.html';
+            primaryAction.textContent = 'Go to Dashboard';
+            secondaryAction.href = '/pages/search-ride.html';
+            secondaryAction.textContent = 'Search Rides';
+          }
+        } else {
+          primaryAction.href = '/pages/signup.html';
+          primaryAction.textContent = 'Get Started';
+          secondaryAction.href = '/pages/login.html';
+          secondaryAction.textContent = 'How it works';
+        }
+      }
+
+      // Check if current token is valid
+      async validateToken() {
+        if (!this.token) return false;
+
+        try {
+          const response = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${this.token}` }
+          });
+          return response.ok;
+        } catch (error) {
+          return false;
+        }
+      }
+    }
+
+    // Theme management
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      const themeToggle = document.getElementById('theme-toggle');
+      if (themeToggle) themeToggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+    }
+
+    function setupThemeToggle() {
+      const themeToggle = document.getElementById('theme-toggle');
+      if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+          const nextTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          applyTheme(nextTheme);
+        });
+      }
+    }
+
+    // Initialize everything
+    const authManager = new AuthManager();
+
+    setupThemeToggle();
+    applyTheme(currentTheme);
+
+    // Check token validity on page load
+    authManager.validateToken().then(isValid => {
+      if (!isValid && authManager.isAuthenticated()) {
+        authManager.logout();
+      }
+    });
+  </script>
+</body>
+</html>

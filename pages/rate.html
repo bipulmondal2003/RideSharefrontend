@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Rate Ride — RideShare</title>
+  <link rel="stylesheet" href="/styles.css"/>
+  <style>
+    .rate-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%); }
+    .rate-container { width: 100%; max-width: 550px; }
+    .rate-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 1rem; padding: 2.5rem 2rem; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); }
+    .rate-header { text-align: center; margin-bottom: 2.5rem; }
+    .rate-header h1 { font-size: 1.75rem; margin: 0 0 0.5rem; background: linear-gradient(135deg, var(--primary) 0%, #00c4a8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .rate-header p { color: var(--muted); margin: 0; font-size: 0.95rem; }
+    .ride-info { background: var(--surface); border: 1px solid var(--card-border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; }
+    .ride-info-row { display: flex; justify-content: space-between; padding: 0.75rem 0; font-size: 0.95rem; }
+    .ride-info-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+    .ride-info-label { color: var(--muted); }
+    .ride-info-value { font-weight: 600; color: var(--text); }
+    .profile-preview { text-align: center; margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 2px dashed var(--card-border); }
+    .profile-avatar { width: 80px; height: 80px; margin: 0 auto 1rem; background: linear-gradient(135deg, var(--primary) 0%, #00c4a8 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: white; }
+    .profile-name { font-size: 1.3rem; font-weight: 600; margin: 0; }
+    .profile-meta { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+    .stars-container { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .star-button { background: none; border: none; font-size: 3.5rem; cursor: pointer; color: var(--subtle); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); padding: 0.5rem; transform: scale(0.8); }
+    .star-button:hover { color: var(--warning); transform: scale(1.1); }
+    .star-button.active { color: var(--warning); transform: scale(1.3); }
+    .rating-feedback { font-size: 1.25rem; color: var(--primary); font-weight: 600; min-height: 1.8rem; margin: 1rem 0; text-align: center; }
+    .comment-section { margin-bottom: 2.5rem; }
+    .comment-label { display: block; font-size: 0.95rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text); }
+    .comment-input { width: 100%; min-height: 120px; padding: 1rem; border: 1px solid var(--card-border); border-radius: 0.75rem; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.95rem; resize: vertical; }
+    .comment-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+    .char-counter { text-align: right; font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    .action-buttons { display: flex; gap: 1rem; }
+    .action-buttons button { flex: 1; padding: 0.875rem 1.5rem; font-size: 1rem; font-weight: 600; border: none; border-radius: 0.75rem; cursor: pointer; }
+    .submit-btn { background: linear-gradient(135deg, var(--primary) 0%, #00c4a8 100%); color: #070d1a; transition: all 0.2s; }
+    .submit-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 212, 170, 0.3); }
+    .skip-btn { background: var(--card-bg); color: var(--text); border: 1px solid var(--card-border); }
+    .skip-btn:hover { background: var(--surface); }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 3rem 2rem; }
+    .spinner { width: 50px; height: 50px; border: 4px solid var(--card-border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 600px) { .rate-card { padding: 1.5rem 1rem; } .rate-header h1 { font-size: 1.4rem; } .star-button { font-size: 2.5rem; } .action-buttons { flex-direction: column-reverse; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="rate-page">
+    <div class="rate-container">
+      <div id="loading-state" class="rate-card" style="display: none;">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading ride details...</p>
+        </div>
+      </div>
+
+      <div id="main-content" style="display: none;">
+        <div class="rate-card">
+          <div class="rate-header">
+            <h1>⭐ Rate Your Experience</h1>
+            <p>Your feedback helps maintain quality</p>
+          </div>
+
+          <div class="ride-info">
+            <div class="ride-info-row">
+              <span class="ride-info-label">Route</span>
+              <span class="ride-info-value" id="ride-route">-</span>
+            </div>
+            <div class="ride-info-row">
+              <span class="ride-info-label">Date</span>
+              <span class="ride-info-value" id="ride-date">-</span>
+            </div>
+            <div class="ride-info-row">
+              <span class="ride-info-label">Price</span>
+              <span class="ride-info-value" id="ride-price">-</span>
+            </div>
+          </div>
+
+          <div class="profile-preview">
+            <div class="profile-avatar" id="user-avatar">👤</div>
+            <h3 class="profile-name" id="user-name">Loading...</h3>
+            <div class="profile-meta">
+              <span id="user-role">Driver</span>
+              <span id="user-rating">New</span>
+            </div>
+          </div>
+
+          <form id="rating-form" onsubmit="submitRating(event); return false;">
+            <div style="text-align: center; margin-bottom: 2.5rem;">
+              <div style="font-size: 1rem; color: var(--text); margin-bottom: 1.5rem; font-weight: 500;">How was your experience?</div>
+              <div class="stars-container">
+                <button type="button" class="star-button" data-score="1" onclick="selectStar(1); return false;">★</button>
+                <button type="button" class="star-button" data-score="2" onclick="selectStar(2); return false;">★</button>
+                <button type="button" class="star-button" data-score="3" onclick="selectStar(3); return false;">★</button>
+                <button type="button" class="star-button" data-score="4" onclick="selectStar(4); return false;">★</button>
+                <button type="button" class="star-button" data-score="5" onclick="selectStar(5); return false;">★</button>
+              </div>
+              <div class="rating-feedback" id="feedback-text"></div>
+            </div>
+
+            <div class="comment-section">
+              <label class="comment-label">Comment (Optional)</label>
+              <textarea 
+                id="comment" 
+                class="comment-input" 
+                placeholder="What did you like or dislike? Any suggestions?"
+                maxlength="500"
+                oninput="updateCharCount(this.value.length)"
+              ></textarea>
+              <div class="char-counter"><span id="char-count">0</span> / 500</div>
+            </div>
+
+            <div class="action-buttons">
+              <button type="submit" class="submit-btn" id="submit-btn">⭐ Submit Rating</button>
+              <button type="button" class="skip-btn" onclick="history.back()">Skip</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const bookingId = new URLSearchParams(location.search).get('bookingId');
+    let selectedScore = 0;
+
+    const feedbackEmoji = {
+      1: '😞 Terrible',
+      2: '😕 Poor',
+      3: '😐 Okay',
+      4: '😊 Good',
+      5: '😍 Excellent'
+    };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth()) return;
+      buildNav(auth, 'my-bookings');
+
+      if (!bookingId) {
+        toast.error('No booking ID provided');
+        setTimeout(() => location.href = '/pages/my-bookings.html', 2000);
+        return;
+      }
+
+      await loadBookingData();
+    });
+
+    async function loadBookingData() {
+      const loading = document.getElementById('loading-state');
+      const main = document.getElementById('main-content');
+
+      loading.style.display = 'block';
+      main.style.display = 'none';
+
+      try {
+        const data = await auth.api(`/api/ratings/booking/${bookingId}`);
+
+        if (!data.success) throw new Error(data.error);
+
+        document.getElementById('ride-route').textContent = `${data.ride.from} → ${data.ride.to}`;
+        document.getElementById('ride-date').textContent = new Date(data.ride.date).toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+        });
+        document.getElementById('ride-price').textContent = `$${data.booking.totalPrice.toFixed(2)}`;
+
+        const other = data.otherUser;
+        const initials = other.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
+        document.getElementById('user-avatar').textContent = initials;
+        document.getElementById('user-name').textContent = other.name;
+        document.getElementById('user-role').textContent = other.userType === 'driver' ? '🚗 Driver' : '🧳 Passenger';
+        document.getElementById('user-rating').textContent = other.trustScore === 'New' ? 'New User' : `⭐ ${other.trustScore}`;
+
+        loading.style.display = 'none';
+        main.style.display = 'block';
+      } catch (err) {
+        console.error('Load error:', err);
+        toast.error(err.message);
+        setTimeout(() => location.href = '/pages/my-bookings.html', 3000);
+      }
+    }
+
+    function selectStar(score) {
+      selectedScore = score;
+      document.querySelectorAll('.star-button').forEach((btn, idx) => {
+        if (idx < score) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      document.getElementById('feedback-text').textContent = feedbackEmoji[score];
+    }
+
+    function updateCharCount(length) {
+      document.getElementById('char-count').textContent = length;
+    }
+
+    async function submitRating(e) {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submit-btn');
+
+      if (!selectedScore) {
+        toast.error('Please select a rating (1-5 stars)');
+        return;
+      }
+
+      const comment = document.getElementById('comment').value.trim();
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ Submitting...';
+
+      try {
+        const result = await auth.api('/api/ratings', {
+          method: 'POST',
+          body: JSON.stringify({ bookingId, score: selectedScore, comment })
+        });
+
+        if (!result.success) throw new Error(result.error);
+
+        toast.success('Thank you for rating!');
+        setTimeout(() => location.href = '/pages/my-bookings.html', 1500);
+      } catch (err) {
+        console.error('Submit error:', err);
+        toast.error(`Failed: ${err.message}`);
+        submitBtn.disabled = false;
+        submitBtn.textContent = '⭐ Submit Rating';
+      }
+    }
+  </script>
+</body>
+</html>

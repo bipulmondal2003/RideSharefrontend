@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Login — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+  <div class="auth-wrapper"><div class="auth-container">
+    <div class="auth-card fade-up">
+      <div class="auth-logo"><div class="auth-logo-icon"></div>RideShare</div>
+      <h1>Welcome back</h1>
+      <p class="auth-subtitle">Sign in to continue your journey.</p>
+      <form class="auth-form" id="login-form" novalidate>
+        <div class="form-group"><label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@example.com" required autocomplete="email" /></div>
+        <div class="form-group"><label for="password">Password</label>
+          <input type="password" id="password" placeholder="Password" required autocomplete="current-password" /></div>
+        <p class="error-msg" id="err"></p>
+        <button type="submit" class="button primary-button full-width btn-lg" id="submit-btn">Sign In</button>
+      </form>
+      <div class="auth-footer"><p>No account? <a href="/pages/signup.html">Create one →</a></p></div>
+    </div>
+  </div></div>
+  <script src="/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      buildNav(auth, 'login');
+      if (auth.isAuth) {
+        if (auth.isAdmin) { location.href = '/pages/admin/dashboard.html'; return; }
+        location.href = auth.userType === 'driver' ? '/pages/dashboard.html' : '/pages/passenger-dashboard.html';
+      }
+    });
+    document.getElementById('login-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const err = document.getElementById('err');
+      err.classList.remove('visible'); btn.disabled = true; btn.textContent = 'Signing in…';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('email').value.trim(), password: document.getElementById('password').value })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+        auth.save(data.token, data.user);
+        toast.success('Welcome back, ' + data.user.name + '!');
+        setTimeout(() => {
+          if (data.user.userType === 'admin') location.href = '/pages/admin/dashboard.html';
+          else if (data.user.userType === 'driver') location.href = '/pages/dashboard.html';
+          else location.href = '/pages/passenger-dashboard.html';
+        }, 600);
+      } catch (e) {
+        err.textContent = e.message; err.classList.add('visible');
+        btn.disabled = false; btn.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Reports Moderation — RideShare Admin</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="admin-nav-section"><h2>Dashboard</h2>
+        <a class="admin-nav-link" href="/pages/admin/dashboard.html">📊 Analytics</a></div>
+      <div class="admin-nav-section"><h2>Management</h2>
+        <a class="admin-nav-link" href="/pages/admin/users.html">👥 Users</a>
+        <a class="admin-nav-link" href="/pages/admin/rides.html">🚗 Rides</a>
+        <a class="admin-nav-link" href="/pages/admin/bookings.html">🎫 Bookings</a></div>
+      <div class="admin-nav-section"><h2>Moderation</h2>
+        <a class="admin-nav-link active" href="/pages/admin/reports.html">🚩 Reports</a></div>
+    </div>
+
+    <div class="admin-content">
+      <div class="page-header fade-up"><h1>User Reports</h1><p>Review and take action on reported users.</p></div>
+
+      <div class="filters-bar fade-up delay-1">
+        <select id="filter-status" style="max-width:160px">
+          <option value="">All Reports</option>
+          <option value="pending">Pending</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="actioned">Actioned</option>
+          <option value="dismissed">Dismissed</option>
+        </select>
+        <button class="button primary-button btn-sm" onclick="loadReports(1)">🔍 Filter</button>
+      </div>
+
+      <div id="reports-container" class="fade-up delay-2">
+        <div class="loading-state"><div class="spinner"></div><p>Loading reports...</p></div>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentPage = 1;
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAdmin()) return;
+      buildNav(auth, 'admin-reports');
+      loadReports(1);
+    });
+
+    async function loadReports(page) {
+      const status = document.getElementById('filter-status').value;
+      const params = new URLSearchParams({page, limit: 20});
+      if (status) params.set('status', status);
+
+      try {
+        const data = await auth.api(`/api/admin/reports?${params}`);
+        currentPage = page;
+        renderReports(data.reports);
+        buildPagination(document.getElementById('pagination'), page, data.pages, p => loadReports(p));
+      } catch (e) { toast.error('Failed to load reports: ' + e.message); }
+    }
+
+    function renderReports(reports) {
+      const el = document.getElementById('reports-container');
+      if (!reports.length) {
+        showEmpty(el, '✅', 'No reports', 'All clear! No pending user reports.');
+        return;
+      }
+
+      el.innerHTML = reports.map(r => `
+        <div class="card mb-2">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <strong>${r.reported?.name}</strong>
+                <span class="badge badge-danger">${r.reason}</span>
+                ${statusBadge(r.status)}
+              </div>
+              <p class="text-sm text-muted mt-1">Reported by ${r.reporter?.name} • ${fmtAgo(r.createdAt)}</p>
+            </div>
+            <div>${r.reported?.isBanned ? '<span class="badge badge-cancelled">BANNED</span>' : ''}</div>
+          </div>
+          ${r.details ? `<p class="text-sm mb-2" style="background:rgba(255,255,255,.02);padding:.75rem;border-radius:var(--radius);border:1px solid var(--card-border)">${r.details}</p>` : ''}
+          ${r.status==='pending' ? `
+            <div class="flex gap-1">
+              <button class="button primary-button btn-sm" onclick="resolveReport('${r._id}','actioned')">Ban User</button>
+              <button class="button outline-button btn-sm" onclick="resolveReport('${r._id}','dismissed')">Dismiss</button>
+            </div>
+          ` : `<p class="text-xs text-muted">Resolved: ${r.adminNote || 'No note'}</p>`}
+        </div>
+      `).join('');
+    }
+
+    async function resolveReport(id, action) {
+      const note = prompt('Admin note (optional):');
+      try {
+        await auth.api(`/api/admin/reports/${id}/resolve`, {
+          method: 'PUT',
+          body: JSON.stringify({ action, adminNote: note || '' })
+        });
+        toast.success('Report resolved.');
+        loadReports(currentPage);
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

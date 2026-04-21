@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Rides Management — RideShare Admin</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="admin-nav-section"><h2>Dashboard</h2>
+        <a class="admin-nav-link" href="/pages/admin/dashboard.html">📊 Analytics</a></div>
+      <div class="admin-nav-section"><h2>Management</h2>
+        <a class="admin-nav-link" href="/pages/admin/users.html">👥 Users</a>
+        <a class="admin-nav-link active" href="/pages/admin/rides.html">🚗 Rides</a>
+        <a class="admin-nav-link" href="/pages/admin/bookings.html">🎫 Bookings</a></div>
+      <div class="admin-nav-section"><h2>Moderation</h2>
+        <a class="admin-nav-link" href="/pages/admin/reports.html">🚩 Reports</a></div>
+    </div>
+
+    <div class="admin-content">
+      <div class="page-header fade-up"><h1>Rides Management</h1><p>Review, monitor, and manage active rides.</p></div>
+
+      <div class="filters-bar fade-up delay-1">
+        <select id="filter-status" style="max-width:160px">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <input type="text" id="search" placeholder="Search route..." style="flex:1;max-width:280px"/>
+        <button class="button primary-button btn-sm" onclick="loadRides(1)">🔍 Search</button>
+      </div>
+
+      <div class="rides-grid fade-up delay-2" id="rides-container">
+        <div class="loading-state"><div class="spinner"></div><p>Loading rides...</p></div>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentPage = 1;
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAdmin()) return;
+      buildNav(auth, 'admin-rides');
+      document.getElementById('search').addEventListener('keyup', e => { if (e.key==='Enter') loadRides(1); });
+      loadRides(1);
+    });
+
+    async function loadRides(page) {
+      const status = document.getElementById('filter-status').value;
+      const search = document.getElementById('search').value;
+      const params = new URLSearchParams({page, limit: 20});
+      if (status) params.set('status', status);
+      if (search) params.set('search', search);
+
+      try {
+        const data = await auth.api(`/api/admin/rides?${params}`);
+        currentPage = page;
+        renderRides(data.rides);
+        buildPagination(document.getElementById('pagination'), page, data.pages, p => loadRides(p));
+      } catch (e) { toast.error('Failed to load rides: ' + e.message); }
+    }
+
+    function renderRides(rides) {
+      const el = document.getElementById('rides-container');
+      if (!rides.length) {
+        showEmpty(el, '🚗', 'No rides found', 'Try adjusting your filters.');
+        return;
+      }
+      el.innerHTML = `<div class="rides-grid">${rides.map(r => `
+        <div class="ride-card">
+          <div class="ride-header">
+            <div class="ride-route">
+              <h3>${r.from} → ${r.to}</h3>
+              <p>${fmtDate(r.date)} · ${r.time}</p>
+            </div>
+            <div><div class="ride-price-tag">${fmtCur(r.price)}<small>/seat</small></div>${statusBadge(r.status)}</div>
+          </div>
+          <div class="ride-meta">
+            <span class="ride-meta-chip">👤 ${r.driver?.name || 'Driver'}</span>
+            <span class="ride-meta-chip">💺 ${r.availableSeats}/${r.totalSeats} available</span>
+            <span class="ride-meta-chip">🚗 ${r.car}</span>
+          </div>
+          <div class="ride-actions">
+            <button class="button ghost-button btn-sm" onclick="viewRide('${r._id}')">Details</button>
+            ${r.status==='active'?`<button class="button danger-button btn-sm" onclick="cancelRide('${r._id}')">Cancel</button>`:''}
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    async function viewRide(id) {
+      try {
+        const ride = await auth.api(`/api/rides/${id}`);
+        alert(`${ride.from} → ${ride.to}\n${fmtDate(ride.date)} at ${ride.time}\nDriver: ${ride.driver?.name}\nSeats: ${ride.availableSeats}/${ride.totalSeats}\nStatus: ${ride.status}`);
+      } catch (e) { toast.error(e.message); }
+    }
+
+    async function cancelRide(id) {
+      const reason = prompt('Cancellation reason:');
+      if (!reason) return;
+      try {
+        await auth.api(`/api/admin/rides/${id}/cancel`, { method: 'PUT', body: JSON.stringify({reason}) });
+        toast.success('Ride cancelled by admin.');
+        loadRides(currentPage);
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

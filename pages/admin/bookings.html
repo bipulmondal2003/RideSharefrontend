@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Bookings Management — RideShare Admin</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="admin-nav-section"><h2>Dashboard</h2>
+        <a class="admin-nav-link" href="/pages/admin/dashboard.html">📊 Analytics</a></div>
+      <div class="admin-nav-section"><h2>Management</h2>
+        <a class="admin-nav-link" href="/pages/admin/users.html">👥 Users</a>
+        <a class="admin-nav-link" href="/pages/admin/rides.html">🚗 Rides</a>
+        <a class="admin-nav-link active" href="/pages/admin/bookings.html">🎫 Bookings</a></div>
+      <div class="admin-nav-section"><h2>Moderation</h2>
+        <a class="admin-nav-link" href="/pages/admin/reports.html">🚩 Reports</a></div>
+    </div>
+
+    <div class="admin-content">
+      <div class="page-header fade-up"><h1>Bookings Management</h1><p>View and manage all ride bookings.</p></div>
+
+      <div class="filters-bar fade-up delay-1">
+        <select id="filter-status" style="max-width:160px">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="completed">Completed</option>
+        </select>
+        <button class="button primary-button btn-sm" onclick="loadBookings(1)">🔍 Filter</button>
+      </div>
+
+      <div class="table-wrapper fade-up delay-2">
+        <table class="data-table">
+          <thead><tr>
+            <th>Passenger</th><th>Route</th><th>Date</th><th>Status</th><th>Seats</th><th>Price</th><th>Action</th>
+          </tr></thead>
+          <tbody id="books-tbody"><tr><td colspan="7" class="text-center text-muted">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentPage = 1;
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAdmin()) return;
+      buildNav(auth, 'admin-bookings');
+      loadBookings(1);
+    });
+
+    async function loadBookings(page) {
+      const status = document.getElementById('filter-status').value;
+      const params = new URLSearchParams({page, limit: 30});
+      if (status) params.set('status', status);
+
+      try {
+        const data = await auth.api(`/api/admin/bookings?${params}`);
+        currentPage = page;
+        renderBookings(data.bookings);
+        buildPagination(document.getElementById('pagination'), page, data.pages, p => loadBookings(p));
+      } catch (e) { toast.error('Failed to load bookings: ' + e.message); }
+    }
+
+    function renderBookings(bookings) {
+      const tbody = document.getElementById('books-tbody');
+      if (!bookings.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No bookings found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = bookings.map(b => `
+        <tr>
+          <td>${b.passenger?.name || '?'}</td>
+          <td>${b.ride?.from || '?'} → ${b.ride?.to || '?'}</td>
+          <td>${fmtDate(b.ride?.date || '')}</td>
+          <td>${statusBadge(b.status)}</td>
+          <td>${b.seats || 1}</td>
+          <td>${fmtCur(b.totalPrice)}</td>
+          <td><button class="button ghost-button btn-sm" onclick="if(confirm('Cancel booking?')) cancelBooking('${b._id}')">Cancel</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function cancelBooking(id) {
+      try {
+        await auth.api(`/api/admin/bookings/${id}/cancel`, { method: 'PUT', body: JSON.stringify({reason:'Admin cancelled'}) });
+        toast.success('Booking cancelled.');
+        loadBookings(currentPage);
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

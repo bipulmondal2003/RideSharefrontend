@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Chat — RideShare</title>
+  <link rel="stylesheet" href="/styles.css"/>
+  <style>
+    .chat-page { display: flex; flex-direction: column; height: calc(100vh - 64px); background: var(--bg); }
+    .chat-header { padding: 1rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--card-border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .chat-header-back { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text); padding: 0.5rem; margin-right: 1rem; }
+    .chat-header-info { flex: 1; }
+    .chat-header-title { font-size: 1rem; font-weight: 600; margin: 0; }
+    .chat-header-subtitle { font-size: 0.8rem; color: var(--muted); margin: 0.25rem 0 0; }
+    .chat-messages-container { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .chat-messages-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); }
+    .message-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .message-group.sent { align-items: flex-end; }
+    .message-group.received { align-items: flex-start; }
+    .message-content { max-width: 70%; padding: 0.75rem 1rem; border-radius: 1.25rem; word-break: break-word; line-height: 1.5; font-size: 0.95rem; }
+    .message-content.sent { background: linear-gradient(135deg, var(--primary) 0%, #00c4a8 100%); color: #070d1a; border-bottom-right-radius: 4px; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.2); }
+    .message-content.received { background: var(--card-bg); color: var(--text); border: 1px solid var(--card-border); border-bottom-left-radius: 4px; }
+    .message-meta { display: flex; align-items: center; gap: 0.5rem; font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; padding: 0 0.5rem; }
+    .message-time { order: -1; }
+    .message-status { font-size: 0.8rem; }
+    .message-status.read { color: var(--primary); }
+    .chat-input-area { display: flex; gap: 0.75rem; padding: 1rem 1.5rem; background: var(--surface); border-top: 1px solid var(--card-border); flex-shrink: 0; }
+    .chat-input { flex: 1; resize: none; max-height: 120px; min-height: 44px; padding: 0.75rem 1rem; border: 1px solid var(--card-border); border-radius: var(--radius-lg); background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.95rem; }
+    .chat-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1); }
+    .chat-send-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--primary) 0%, #00c4a8 100%); color: #070d1a; border: none; cursor: pointer; font-size: 1.2rem; font-weight: 600; transition: all 0.2s; flex-shrink: 0; }
+    .chat-send-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 212, 170, 0.3); }
+    .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    @media (max-width: 768px) { .message-content { max-width: 85%; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar"><div class="container" style="display: flex; align-items: center; justify-content: space-between;">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="chat-page">
+    <div class="chat-header">
+      <button class="chat-header-back" onclick="history.back()" title="Back">←</button>
+      <div class="chat-header-info">
+        <div class="chat-header-title" id="chat-title">Loading...</div>
+        <div class="chat-header-subtitle" id="chat-route">Loading...</div>
+      </div>
+    </div>
+
+    <div class="chat-messages-container" id="messages-container">
+      <div class="chat-messages-empty">
+        <p style="font-size: 2rem;">💬</p>
+        <p>No messages yet. Start the conversation!</p>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea 
+        id="message-input" 
+        class="chat-input" 
+        placeholder="Type a message... (Shift+Enter for new line)"
+        maxlength="1000"
+        required
+      ></textarea>
+      <button class="chat-send-btn" id="send-button" title="Send (Ctrl+Enter)">→</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+
+  <script>
+    const bookingId = new URLSearchParams(location.search).get('bookingId');
+    let chatData = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth()) return;
+      buildNav(auth, 'chat');
+
+      if (!bookingId) {
+        toast.error('No booking specified');
+        setTimeout(() => history.back(), 2000);
+        return;
+      }
+
+      await loadChat();
+      setupEventListeners();
+      setupSocket();
+    });
+
+    async function loadChat() {
+      try {
+        const result = await auth.api(`/api/messages/${bookingId}`);
+        if (!result.success) throw new Error(result.error);
+
+        chatData = result.bookingInfo;
+        document.getElementById('chat-title').textContent = 'Chat';
+        document.getElementById('chat-route').textContent = 'Loading...';
+
+        renderMessages(result.messages);
+        scrollToBottom();
+      } catch (err) {
+        console.error('Load chat error:', err);
+        toast.error(`Failed to load chat: ${err.message}`);
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('messages-container');
+      
+      if (!messages?.length) {
+        container.innerHTML = `
+          <div class="chat-messages-empty">
+            <p style="font-size: 2rem;">💬</p>
+            <p>No messages yet. Start the conversation!</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = messages.map(msg => {
+        const isSent = msg.sender._id === auth.userId;
+        const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const status = msg.readAt ? '✓✓' : '✓';
+
+        return `
+          <div class="message-group ${isSent ? 'sent' : 'received'}">
+            <div class="message-content ${isSent ? 'sent' : 'received'}">
+              ${escapeHtml(msg.content)}
+              ${isSent ? `<span class="message-status ${msg.readAt ? 'read' : ''}">${status}</span>` : ''}
+            </div>
+            <div class="message-meta">
+              <span class="message-time">${time}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setupEventListeners() {
+      const input = document.getElementById('message-input');
+      const sendBtn = document.getElementById('send-button');
+
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    }
+
+    function setupSocket() {
+      const socket = getSocket();
+      if (!socket) return;
+
+      socket.emit('join_booking_chat', bookingId);
+
+      socket.on('message_created', (msg) => {
+        if (msg.booking === bookingId) {
+          loadChat();
+          scrollToBottom();
+        }
+      });
+
+      socket.on('new_message_notification', (data) => {
+        if (data.bookingId === bookingId) {
+          toast.info(`New message from ${data.senderName}`);
+        }
+      });
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const content = input.value.trim();
+      const sendBtn = document.getElementById('send-button');
+
+      if (!content) {
+        toast.warning('Message cannot be empty');
+        return;
+      }
+
+      sendBtn.disabled = true;
+
+      try {
+        const result = await auth.api(`/api/messages/${bookingId}`, {
+          method: 'POST',
+          body: JSON.stringify({ content })
+        });
+
+        if (!result.success) throw new Error(result.error);
+
+        input.value = '';
+        await loadChat();
+        scrollToBottom();
+      } catch (err) {
+        console.error('Send message error:', err);
+        toast.error(`Failed to send: ${err.message}`);
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById('messages-container');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

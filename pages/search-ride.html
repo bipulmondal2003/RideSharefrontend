@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Find a Ride — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .search-hero {
+      background: linear-gradient(135deg, rgba(0,212,170,0.06) 0%, rgba(99,102,241,0.06) 100%);
+      border-bottom: 1px solid var(--card-border);
+      padding: 2.5rem 0;
+    }
+    .search-form-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      display: grid;
+      gap: 1rem;
+    }
+    .search-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 160px auto;
+      gap: 0.75rem;
+      align-items: end;
+    }
+    @media (max-width: 768px) { .search-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="search-hero">
+    <div class="container">
+      <div class="page-header fade-up">
+        <h1>Find a Ride</h1>
+        <p>Search available rides matching your route and date.</p>
+      </div>
+      <div class="search-form-card fade-up delay-1">
+        <form id="search-form">
+          <div class="search-grid">
+            <div class="form-group">
+              <label for="from">From</label>
+              <input type="text" id="from" placeholder="Starting location" />
+            </div>
+            <div class="form-group">
+              <label for="to">To</label>
+              <input type="text" id="to" placeholder="Destination" />
+            </div>
+            <div class="form-group">
+              <label for="date">Date</label>
+              <input type="date" id="date" />
+            </div>
+            <button type="submit" class="button primary-button" style="height:46px;">Search</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-wrapper" style="padding-top:2rem;">
+    <div class="container">
+      <div id="results-header" class="flex items-center justify-between mb-2" style="display:none!important;">
+        <h2 id="results-count" class="text-sm text-muted"></h2>
+      </div>
+      <div id="rides-container"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      buildNav(auth, 'search-ride');
+      // Pre-fill from query params (from home quick search)
+      const p = new URLSearchParams(location.search);
+      if (p.get('from')) document.getElementById('from').value = p.get('from');
+      if (p.get('to')) document.getElementById('to').value = p.get('to');
+      if (p.get('date')) document.getElementById('date').value = p.get('date');
+      if (p.get('from') || p.get('to') || p.get('date')) doSearch();
+      else loadAll();
+    });
+
+    document.getElementById('search-form').addEventListener('submit', (e) => {
+      e.preventDefault(); doSearch();
+    });
+
+    async function loadAll() {
+      showLoading(document.getElementById('rides-container'));
+      try {
+        const rides = await fetch('/api/rides').then(r => r.json());
+        renderRides(rides, 'Available rides');
+      } catch (e) { toast.error('Failed to load rides'); }
+    }
+
+    async function doSearch() {
+      const from = document.getElementById('from').value.trim();
+      const to = document.getElementById('to').value.trim();
+      const date = document.getElementById('date').value;
+      showLoading(document.getElementById('rides-container'));
+      try {
+        const params = new URLSearchParams();
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        if (date) params.set('date', date);
+        const rides = await fetch('/api/rides/search?' + params).then(r => r.json());
+        renderRides(rides, `${rides.length} ride${rides.length !== 1 ? 's' : ''} found`);
+      } catch (e) { toast.error('Search failed: ' + e.message); }
+    }
+
+    function renderRides(rides, label) {
+      const el = document.getElementById('rides-container');
+      document.getElementById('results-count').textContent = label;
+      if (!rides.length) {
+        showEmpty(el, '🔍', 'No rides found', 'Try different locations or clear the date filter.');
+        return;
+      }
+      el.innerHTML = `
+        <p class="text-muted text-sm mb-2">${label}</p>
+        <div class="rides-grid">
+          ${rides.map(r => `
+            <div class="ride-card">
+              <div class="ride-header">
+                <div class="ride-route">
+                  <h3>${r.from} <span class="route-arrow">→</span> ${r.to}</h3>
+                  <p>${fmtDate(r.date)} at ${r.time}</p>
+                </div>
+                <div class="ride-price-tag">${fmtCur(r.price)}<small>per seat</small></div>
+              </div>
+              <div class="ride-meta">
+                <span class="ride-meta-chip">🚗 ${r.car || 'Car'}</span>
+                <span class="ride-meta-chip">💺 ${r.availableSeats} seats left</span>
+                <span class="ride-meta-chip">👤 ${r.driver?.name || 'Driver'}</span>
+              </div>
+              ${r.notes ? `<p class="text-sm text-muted">${r.notes}</p>` : ''}
+              <div class="ride-actions">
+                <button class="button primary-button" onclick="bookRide('${r._id}','${(r.from+' → '+r.to).replace(/'/g,"\\'")}')">Book Now</button>
+                <button class="button ghost-button" onclick="location.href='/pages/ride-details.html?id=${r._id}'">Details</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>`;
+    }
+
+    async function bookRide(rideId, label) {
+      if (!auth.isAuth) {
+        if (confirm('You need to be logged in to book a ride. Go to login?')) location.href = '/pages/login.html'; return;
+      }
+      if (auth.userType !== 'passenger') { toast.error('Only passengers can book rides.'); return; }
+      if (!confirm(`Book ride: ${label}?\n\nYour request will be sent to the driver for approval.`)) return;
+      try {
+        await auth.api('/api/bookings', { method: 'POST', body: JSON.stringify({ rideId }) });
+        toast.success('Booking request sent! Waiting for driver approval.');
+        doSearch();
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

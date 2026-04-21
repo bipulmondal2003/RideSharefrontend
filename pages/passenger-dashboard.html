@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Dashboard — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="page-header fade-up">
+        <h1 id="welcome-msg">My Dashboard</h1>
+        <p>Track your bookings and find your next ride.</p>
+      </div>
+
+      <div class="stats-row fade-up delay-1">
+        <div class="stat-card">
+          <div class="stat-label">Total Bookings</div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-sub">All time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Upcoming</div>
+          <div class="stat-value" id="stat-upcoming">—</div>
+          <div class="stat-sub">Confirmed rides</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending</div>
+          <div class="stat-value" id="stat-pending">—</div>
+          <div class="stat-sub">Awaiting approval</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Spent</div>
+          <div class="stat-value" id="stat-spent">—</div>
+          <div class="stat-sub">Confirmed bookings</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid fade-up delay-2">
+        <div class="card">
+          <h3 class="mb-2">Quick Actions</h3>
+          <div class="flex flex-col gap-1">
+            <a href="/pages/search-ride.html" class="button primary-button full-width">🔍 Find a Ride</a>
+            <a href="/pages/my-bookings.html" class="button ghost-button full-width">View All Bookings</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="flex items-center justify-between mb-2">
+            <h3>Recent Bookings</h3>
+            <a href="/pages/my-bookings.html" class="button outline-button btn-sm">View All</a>
+          </div>
+          <div id="recent-bookings">
+            <div class="loading-state"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth('passenger')) return;
+      buildNav(auth, 'passenger-dashboard');
+      document.getElementById('welcome-msg').textContent = `Welcome back, ${auth.userName} 👋`;
+      await loadDashboard();
+    });
+
+    async function loadDashboard() {
+      try {
+        const bookings = await auth.api('/api/bookings/my-bookings');
+        document.getElementById('stat-total').textContent = bookings.length;
+        document.getElementById('stat-upcoming').textContent = bookings.filter(b => b.status === 'confirmed').length;
+        document.getElementById('stat-pending').textContent = bookings.filter(b => b.status === 'pending').length;
+        const spent = bookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.totalPrice || 0), 0);
+        document.getElementById('stat-spent').textContent = fmtCur(spent);
+        renderRecent(bookings.slice(0, 5));
+      } catch (e) { toast.error('Failed to load dashboard: ' + e.message); }
+    }
+
+    function renderRecent(bookings) {
+      const el = document.getElementById('recent-bookings');
+      if (!bookings.length) {
+        showEmpty(el, '🎟️', 'No bookings yet', 'Find and book your first ride!',
+          '<a href="/pages/search-ride.html" class="button primary-button mt-2">Find Rides</a>'); return;
+      }
+      el.innerHTML = bookings.map(b => `
+        <div class="activity-item">
+          <div class="activity-icon">🚗</div>
+          <div class="activity-content">
+            <p>${b.ride?.from || '?'} → ${b.ride?.to || '?'}</p>
+            <small>${fmtDate(b.bookingDate)} · ${fmtCur(b.totalPrice)}</small>
+          </div>
+          ${statusBadge(b.status)}
+        </div>
+      `).join('');
+    }
+  </script>
+</body>
+</html>

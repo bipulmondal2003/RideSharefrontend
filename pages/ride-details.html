@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ride Details — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container" style="max-width:720px">
+      <div class="mb-3 fade-up">
+        <button class="button outline-button btn-sm" onclick="history.back()">← Back to Search</button>
+      </div>
+
+      <div id="ride-container">
+        <div class="loading-state"><div class="spinner"></div><p>Loading ride details…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    const rideId = new URLSearchParams(location.search).get('id');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      buildNav(auth, 'search-ride');
+      if (!rideId) { toast.error('No ride specified'); history.back(); return; }
+      await loadRide();
+    });
+
+    async function loadRide() {
+      try {
+        const ride = await fetch(`/api/rides/${rideId}`).then(r => r.json());
+        renderRide(ride);
+      } catch (e) { toast.error('Failed to load ride'); }
+    }
+
+    function renderRide(ride) {
+      const driver = ride.driver || {};
+      const isDriver = auth.isAuth && auth.userId === (driver._id || driver.id);
+      const isPassenger = auth.isAuth && auth.userType === 'passenger';
+
+      document.getElementById('ride-container').innerHTML = `
+        <div class="card fade-up">
+          <!-- Route header -->
+          <div style="text-align:center;padding:1.5rem 0 1rem;border-bottom:1px solid var(--card-border);margin-bottom:1.5rem">
+            <p class="text-xs text-muted mb-1" style="letter-spacing:.08em;text-transform:uppercase">Route</p>
+            <h1 style="font-size:clamp(1.6rem,4vw,2.5rem)">${ride.from} <span class="route-arrow" style="font-size:1.5rem">→</span> ${ride.to}</h1>
+            <div class="flex items-center justify-center gap-2 mt-2">
+              <span class="ride-meta-chip">📅 ${fmtDate(ride.date)}</span>
+              <span class="ride-meta-chip">🕐 ${ride.time}</span>
+              ${statusBadge(ride.status)}
+            </div>
+          </div>
+
+          <!-- Details grid -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1.25rem;margin-bottom:1.5rem">
+            <div class="stat-card" style="text-align:center">
+              <div class="stat-label">Price</div>
+              <div class="stat-value" style="font-size:1.75rem">${fmtCur(ride.price)}</div>
+              <div class="stat-sub">per seat</div>
+            </div>
+            <div class="stat-card" style="text-align:center">
+              <div class="stat-label">Seats Left</div>
+              <div class="stat-value" style="font-size:1.75rem">${ride.availableSeats}</div>
+              <div class="stat-sub">of ${ride.totalSeats} total</div>
+            </div>
+            <div class="stat-card" style="text-align:center">
+              <div class="stat-label">Vehicle</div>
+              <div class="stat-value" style="font-size:1.15rem;margin-top:.5rem">${ride.car}</div>
+              <div class="stat-sub">Driver's car</div>
+            </div>
+          </div>
+
+          <!-- Driver info -->
+          <div class="card card-sm" style="margin-bottom:1.25rem;display:flex;align-items:center;gap:1rem">
+            <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;font-family:'Sora',sans-serif;color:#070d1a;flex-shrink:0">
+              ${(driver.name || 'D')[0].toUpperCase()}
+            </div>
+            <div>
+              <p class="font-bold">${driver.name || 'Driver'}</p>
+              <p class="text-sm text-muted">Driver</p>
+            </div>
+          </div>
+
+          ${ride.notes ? `
+            <div class="card card-sm" style="margin-bottom:1.25rem;background:rgba(99,102,241,0.05);border-color:rgba(99,102,241,0.2)">
+              <p class="text-xs text-muted mb-1" style="text-transform:uppercase;letter-spacing:.07em">Driver's Notes</p>
+              <p>${ride.notes}</p>
+            </div>
+          ` : ''}
+
+          <!-- Actions -->
+          <div class="ride-actions" style="justify-content:center;flex-wrap:wrap">
+            ${isPassenger && ride.status === 'active' && ride.availableSeats > 0 ? `
+              <button class="button primary-button btn-lg" onclick="bookRide()">Book This Ride</button>
+            ` : ''}
+            ${isPassenger && ride.availableSeats === 0 ? `<p class="text-muted text-sm">This ride is fully booked.</p>` : ''}
+            ${isDriver ? `
+              <a href="/pages/offer-ride.html?edit=${ride._id}" class="button outline-button btn-lg">Edit Ride</a>
+              <a href="/pages/ride-bookings.html?id=${ride._id}" class="button ghost-button btn-lg">Manage Bookings</a>
+            ` : ''}
+            ${!auth.isAuth && ride.status === 'active' ? `
+              <a href="/pages/login.html" class="button primary-button btn-lg">Login to Book</a>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    async function bookRide() {
+      if (!confirm('Send booking request to the driver?')) return;
+      try {
+        await auth.api('/api/bookings', { method: 'POST', body: JSON.stringify({ rideId }) });
+        toast.success('Booking request sent! The driver will review it shortly.');
+        loadRide();
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

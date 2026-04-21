@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Users Management — RideShare Admin</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="admin-nav-section"><h2>Dashboard</h2>
+        <a class="admin-nav-link" href="/pages/admin/dashboard.html">📊 Analytics</a></div>
+      <div class="admin-nav-section"><h2>Management</h2>
+        <a class="admin-nav-link active" href="/pages/admin/users.html">👥 Users</a>
+        <a class="admin-nav-link" href="/pages/admin/rides.html">🚗 Rides</a>
+        <a class="admin-nav-link" href="/pages/admin/bookings.html">🎫 Bookings</a></div>
+      <div class="admin-nav-section"><h2>Moderation</h2>
+        <a class="admin-nav-link" href="/pages/admin/reports.html">🚩 Reports</a></div>
+    </div>
+
+    <div class="admin-content">
+      <div class="page-header fade-up"><h1>User Management</h1><p>Manage users, view profiles, and handle bans.</p></div>
+
+      <div class="filters-bar fade-up delay-1">
+        <input type="text" id="search" placeholder="Search by name or email..." style="flex:1;max-width:280px"/>
+        <select id="filter-type" style="max-width:160px">
+          <option value="">All Types</option>
+          <option value="driver">Drivers</option>
+          <option value="passenger">Passengers</option>
+        </select>
+        <select id="filter-banned" style="max-width:160px">
+          <option value="">All Users</option>
+          <option value="false">Active</option>
+          <option value="true">Banned</option>
+        </select>
+        <button class="button primary-button btn-sm" onclick="loadUsers(1)">🔍 Search</button>
+      </div>
+
+      <div class="table-wrapper fade-up delay-2">
+        <table class="data-table">
+          <thead><tr>
+            <th>Name</th><th>Email</th><th>Type</th><th>Status</th><th>Rides</th><th>Bookings</th><th>Reports</th><th>Action</th>
+          </tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="8" class="text-center text-muted">Loading...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentPage = 1;
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAdmin()) return;
+      buildNav(auth, 'admin-users');
+      document.getElementById('search').addEventListener('keyup', e => { if (e.key==='Enter') loadUsers(1); });
+      loadUsers(1);
+    });
+
+    async function loadUsers(page) {
+      const search = document.getElementById('search').value;
+      const type = document.getElementById('filter-type').value;
+      const banned = document.getElementById('filter-banned').value;
+      const params = new URLSearchParams({page, limit: 20});
+      if (search) params.set('search', search);
+      if (type) params.set('userType', type);
+      if (banned !== '') params.set('banned', banned);
+
+      try {
+        const data = await auth.api(`/api/admin/users?${params}`);
+        currentPage = page;
+        renderUsers(data.users);
+        buildPagination(document.getElementById('pagination'), page, data.pages, (p) => loadUsers(p));
+      } catch (e) { toast.error('Failed to load users: ' + e.message); }
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById('users-tbody');
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No users found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td><strong>${u.name}</strong></td>
+          <td>${u.email}</td>
+          <td><span class="badge ${u.userType==='driver'?'badge-active':'badge-confirmed'}">${u.userType}</span></td>
+          <td>${u.isBanned ? '<span class="badge badge-cancelled">Banned</span>' : '<span class="badge badge-confirmed">Active</span>'}</td>
+          <td><span class="text-sm">—</span></td>
+          <td><span class="text-sm">—</span></td>
+          <td><span class="text-sm">${u.reportCount || 0}</span></td>
+          <td><button class="button ghost-button btn-sm" onclick="viewUser('${u._id}')">View</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function viewUser(id) {
+      try {
+        const data = await auth.api(`/api/admin/users/${id}`);
+        alert(`${data.user.name}\n${data.user.email}\nStatus: ${data.user.isBanned?'Banned':'Active'}\nRides: ${data.rides.length}\nBookings: ${data.bookings.length}\nReports Against: ${data.reportsAgainst}`);
+        // TODO: Build a modal dialog instead of alert
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>

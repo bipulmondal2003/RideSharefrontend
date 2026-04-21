@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Offer a Ride — RideShare</title>
+  <link rel="stylesheet" href="/styles.css"/>
+  <style>
+    .offer-layout{display:grid;grid-template-columns:1fr 320px;gap:2rem;align-items:start}
+    @media(max-width:900px){.offer-layout{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+  <div class="page-wrapper"><div class="container">
+    <div class="page-header fade-up" id="page-hdr"><h1>Offer a Ride</h1><p>Share your route with passengers.</p></div>
+    <div class="offer-layout">
+      <div class="card fade-up delay-1">
+        <form id="offer-form" novalidate>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label>From *</label><input type="text" id="from" placeholder="Starting location" required/></div>
+            <div class="form-group"><label>To *</label><input type="text" id="to" placeholder="Destination" required/></div>
+          </div>
+
+          <!-- Waypoints -->
+          <div class="form-group mt-2">
+            <label>Intermediate Stops <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <div class="waypoint-list" id="waypoint-list"></div>
+            <button type="button" class="button outline-button btn-sm mt-1" onclick="addWaypoint()">＋ Add Stop</button>
+          </div>
+
+          <div class="form-row form-row-2 mt-2">
+            <div class="form-group"><label>Date *</label><input type="date" id="date" required/></div>
+            <div class="form-group"><label>Time *</label><input type="time" id="time" required/></div>
+          </div>
+          <div class="form-row form-row-3 mt-2">
+            <div class="form-group"><label>Seats *</label><input type="number" id="seats" min="1" max="8" value="2" required/></div>
+            <div class="form-group"><label>Price / Seat ($) *</label><input type="number" id="price" min="0" step="0.5" placeholder="10.00" required/></div>
+            <div class="form-group"><label>Vehicle *</label><input type="text" id="car" placeholder="e.g. Honda Civic" required/></div>
+          </div>
+          <div class="form-group mt-2"><label>Notes (optional)</label>
+            <textarea id="notes" placeholder="Meetup point, luggage policy, etc." rows="3"></textarea>
+          </div>
+
+          <!-- Recurring -->
+          <div class="form-group mt-2">
+            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer">
+              <input type="checkbox" id="recurring-toggle" style="width:18px;height:18px;cursor:pointer"/>
+              Recurring ride (repeat automatically)
+            </label>
+            <div class="recurring-box mt-1" id="recurring-box">
+              <div class="form-row form-row-2">
+                <div class="form-group"><label>Repeat</label>
+                  <select id="recurring-type">
+                    <option value="daily">Daily</option>
+                    <option value="weekly" selected>Weekly (same day)</option>
+                    <option value="weekdays">Weekdays only</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Occurrences</label>
+                  <input type="number" id="recurring-count" min="2" max="12" value="4" placeholder="4"/>
+                </div>
+              </div>
+              <p class="text-xs text-muted mt-1">Creates multiple ride listings automatically.</p>
+            </div>
+          </div>
+
+          <p class="error-msg mt-2" id="err"></p>
+          <div class="flex gap-1 mt-2">
+            <button type="submit" class="button primary-button btn-lg" id="submit-btn">Post Ride</button>
+            <button type="button" class="button outline-button btn-lg" onclick="history.back()">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card fade-up delay-2" style="position:sticky;top:84px">
+        <h3 class="mb-2">💡 Tips</h3>
+        <div style="display:flex;flex-direction:column;gap:.75rem">
+          <div style="padding:.85rem;background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.12);border-radius:var(--radius);font-size:.875rem">💰 Set a fair price — check similar routes for reference.</div>
+          <div style="padding:.85rem;background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.12);border-radius:var(--radius);font-size:.875rem">🕐 Be punctual. Passengers rely on your posted time.</div>
+          <div style="padding:.85rem;background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.12);border-radius:var(--radius);font-size:.875rem">📍 Use intermediate stops to pick up more passengers.</div>
+          <div style="padding:.85rem;background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.12);border-radius:var(--radius);font-size:.875rem">🔁 Use recurring rides for your daily commute.</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    const editId = new URLSearchParams(location.search).get('edit');
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth('driver')) return;
+      buildNav(auth, 'offer-ride');
+      document.getElementById('date').min = new Date().toISOString().split('T')[0];
+      document.getElementById('recurring-toggle').addEventListener('change', e => {
+        document.getElementById('recurring-box').classList.toggle('visible', e.target.checked);
+      });
+      if (editId) {
+        document.querySelector('#page-hdr h1').textContent = 'Edit Ride';
+        document.getElementById('submit-btn').textContent = 'Update Ride';
+        try {
+          const r = await auth.api(`/api/rides/${editId}`);
+          document.getElementById('from').value  = r.from;
+          document.getElementById('to').value    = r.to;
+          document.getElementById('date').value  = r.date?.split('T')[0] || '';
+          document.getElementById('time').value  = r.time;
+          document.getElementById('seats').value = r.totalSeats;
+          document.getElementById('price').value = r.price;
+          document.getElementById('car').value   = r.car;
+          document.getElementById('notes').value = r.notes || '';
+          (r.waypoints || []).forEach(w => addWaypoint(w));
+        } catch (e) { toast.error('Failed to load ride: ' + e.message); }
+      }
+    });
+
+    function addWaypoint(val = '') {
+      const list = document.getElementById('waypoint-list');
+      const row = document.createElement('div');
+      row.className = 'waypoint-row';
+      row.innerHTML = `<input type="text" placeholder="Stop (e.g. Main Station)" value="${val}"/><button type="button" class="button danger-button btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+      list.appendChild(row);
+    }
+
+    document.getElementById('offer-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const err = document.getElementById('err');
+      const btn = document.getElementById('submit-btn');
+      err.classList.remove('visible');
+      const body = {
+        from:  document.getElementById('from').value.trim(),
+        to:    document.getElementById('to').value.trim(),
+        date:  document.getElementById('date').value,
+        time:  document.getElementById('time').value,
+        seats: document.getElementById('seats').value,
+        price: document.getElementById('price').value,
+        car:   document.getElementById('car').value.trim(),
+        notes: document.getElementById('notes').value.trim(),
+        waypoints: [...document.querySelectorAll('#waypoint-list input')].map(i => i.value.trim()).filter(Boolean),
+      };
+      if (!body.from||!body.to||!body.date||!body.time||!body.seats||!body.price||!body.car) {
+        err.textContent='Please fill all required fields.'; err.classList.add('visible'); return;
+      }
+      const rec = document.getElementById('recurring-toggle').checked;
+      if (rec) {
+        body.recurring = { enabled: true, type: document.getElementById('recurring-type').value, occurrences: parseInt(document.getElementById('recurring-count').value)||4 };
+      }
+      btn.disabled = true; btn.textContent = editId ? 'Updating…' : 'Posting…';
+      try {
+        if (editId) {
+          await auth.api(`/api/rides/${editId}`, { method: 'PUT', body: JSON.stringify(body) });
+          toast.success('Ride updated!');
+        } else {
+          const result = await auth.api('/api/rides', { method: 'POST', body: JSON.stringify(body) });
+          if (result.recurring) toast.success(`${result.count} recurring rides created!`);
+          else toast.success('Ride posted!');
+        }
+        setTimeout(() => location.href = '/pages/my-rides.html', 700);
+      } catch (e) {
+        err.textContent = e.message; err.classList.add('visible');
+        btn.disabled = false; btn.textContent = editId ? 'Update Ride' : 'Post Ride';
+      }
+    });
+  </script>
+</body>
+</html>

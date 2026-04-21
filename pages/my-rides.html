@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Rides — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="flex items-center justify-between mb-3 fade-up">
+        <div class="page-header" style="margin-bottom:0">
+          <h1>My Rides</h1>
+          <p>All the rides you've offered.</p>
+        </div>
+        <a href="/pages/offer-ride.html" class="button primary-button">＋ New Ride</a>
+      </div>
+
+      <div class="tabs fade-up delay-1">
+        <button class="tab-btn active" data-tab="active">Active</button>
+        <button class="tab-btn" data-tab="completed">Completed</button>
+        <button class="tab-btn" data-tab="cancelled">Cancelled</button>
+      </div>
+
+      <div id="rides-container" class="fade-up delay-2">
+        <div class="loading-state"><div class="spinner"></div><p>Loading rides…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentTab = 'active';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAuth('driver')) return;
+      buildNav(auth, 'my-rides');
+      loadRides(currentTab);
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTab = btn.dataset.tab;
+          loadRides(currentTab);
+        });
+      });
+    });
+
+    async function loadRides(status) {
+      showLoading(document.getElementById('rides-container'));
+      try {
+        const rides = await auth.api(`/api/rides/my-rides?status=${status}`);
+        renderRides(rides, status);
+      } catch (e) { toast.error('Failed to load rides: ' + e.message); }
+    }
+
+    function renderRides(rides, status) {
+      const el = document.getElementById('rides-container');
+      if (!rides.length) {
+        showEmpty(el, '🚗', `No ${status} rides`, 'You have no rides with this status.',
+          status === 'active' ? '<a href="/pages/offer-ride.html" class="button primary-button mt-2">Offer a Ride</a>' : '');
+        return;
+      }
+      el.innerHTML = `<div class="rides-grid">${rides.map(r => `
+        <div class="ride-card">
+          <div class="ride-header">
+            <div class="ride-route">
+              <h3>${r.from} <span class="route-arrow">→</span> ${r.to}</h3>
+              <p>${fmtDate(r.date)} · ${r.time}</p>
+            </div>
+            <div>
+              <div class="ride-price-tag">${fmtCur(r.price)}<small>per seat</small></div>
+              ${statusBadge(r.status)}
+            </div>
+          </div>
+          <div class="ride-meta">
+            <span class="ride-meta-chip">🚗 ${r.car}</span>
+            <span class="ride-meta-chip">💺 ${r.availableSeats}/${r.totalSeats} seats available</span>
+            ${r.notes ? `<span class="ride-meta-chip">📝 Has notes</span>` : ''}
+          </div>
+          ${r.notes ? `<p class="text-sm text-muted" style="padding-top:0.25rem">${r.notes}</p>` : ''}
+          
+          ${['active', 'started', 'en-route'].includes(r.status) ? `
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0 0.5rem 0; padding-top: 0.75rem; border-top: 1px solid var(--card-border);">
+              ${r.status === 'active' ? `
+                <button class="button primary-button btn-sm" onclick="updateRideStatus('${r._id}', 'started')">
+                  🚦 Started
+                </button>
+              ` : ''}
+              
+              ${r.status === 'started' ? `
+                <button class="button primary-button btn-sm" onclick="updateRideStatus('${r._id}', 'en-route')">
+                  🛣️ En Route
+                </button>
+              ` : ''}
+              
+              ${['started', 'en-route'].includes(r.status) ? `
+                <button class="button success-button btn-sm" onclick="updateRideStatus('${r._id}', 'completed')">
+                  🏁 Completed
+                </button>
+              ` : ''}
+            </div>
+          ` : ''}
+          
+          <div class="ride-actions">
+            <a href="/pages/ride-bookings.html?id=${r._id}" class="button ghost-button btn-sm">Bookings</a>
+            ${r.status === 'active' ? `
+              <a href="/pages/offer-ride.html?edit=${r._id}" class="button outline-button btn-sm">Edit</a>
+              <button class="button danger-button btn-sm" onclick="deleteRide('${r._id}')">Delete</button>
+            ` : ''}
+            ${['active', 'started', 'en-route'].includes(r.status) ? `
+              <button class="button outline-button btn-sm" onclick="if(confirm('Cancel ride?')) cancelRide('${r._id}')">Cancel</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    async function deleteRide(id) {
+      if (!confirm('Delete this ride? All associated bookings will be cancelled.')) return;
+      try {
+        await auth.api(`/api/rides/${id}`, { method: 'DELETE' });
+        toast.success('Ride deleted.');
+        loadRides(currentTab);
+      } catch (e) { toast.error(e.message); }
+    }
+
+    async function updateRideStatus(rideId, newStatus) {
+      const statusLabels = {
+        'started': '🚦 Started',
+        'en-route': '🛣️ En Route',
+        'completed': '🏁 Completed'
+      };
+
+      if (!confirm(`Mark ride as ${statusLabels[newStatus]}?`)) return;
+
+      try {
+        const response = await auth.api(`/api/rides/${rideId}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        if (response.success) {
+          toast.success(`Status: ${statusLabels[newStatus]}`);
+          setTimeout(() => location.reload(), 800);
+        }
+      } catch (err) {
+        toast.error(`Failed: ${err.message}`);
+      }
+    }
+
+    async function cancelRide(rideId) {
+      const reason = prompt('Cancellation reason (optional):') || 'Driver cancelled';
+      
+      try {
+        const response = await auth.api(`/api/rides/${rideId}/cancel`, {
+          method: 'PUT',
+          body: JSON.stringify({ reason })
+        });
+
+        if (response.success) {
+          toast.warning(`Ride cancelled. ${response.affectedBookings} passengers notified.`);
+          loadRides(currentTab);
+        }
+      } catch (err) {
+        toast.error(`Failed: ${err.message}`);
+      }
+    }
+  </script>
+</body>
+</html>

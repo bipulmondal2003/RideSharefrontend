@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ride Bookings — RideShare</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <button class="brand-button" onclick="location.href='/'">RideShare</button>
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+      <div class="nav-links" id="nav-links"></div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="flex items-center gap-2 mb-3 fade-up">
+        <button class="button outline-button btn-sm" onclick="history.back()">← Back</button>
+        <div>
+          <h1 id="ride-title" style="font-size:1.5rem">Ride Bookings</h1>
+          <p class="text-muted text-sm" id="ride-subtitle">Loading…</p>
+        </div>
+      </div>
+
+      <!-- Ride Summary -->
+      <div class="card mb-3 fade-up delay-1" id="ride-summary" style="display:none">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="ride-meta" id="ride-meta-chips"></div>
+          <div class="flex gap-1">
+            <a id="edit-btn" href="#" class="button outline-button btn-sm">Edit Ride</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row fade-up delay-2" id="booking-stats" style="display:none">
+        <div class="stat-card">
+          <div class="stat-label">Total Bookings</div>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending</div>
+          <div class="stat-value" id="stat-pending">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Confirmed</div>
+          <div class="stat-value" id="stat-confirmed">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value" id="stat-revenue">—</div>
+        </div>
+      </div>
+
+      <div id="bookings-container" class="fade-up delay-3">
+        <div class="loading-state"><div class="spinner"></div><p>Loading bookings…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    const rideId = new URLSearchParams(location.search).get('id');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth('driver')) return;
+      buildNav(auth, 'my-rides');
+      if (!rideId) { toast.error('No ride specified'); history.back(); return; }
+      await loadRide();
+      await loadBookings();
+    });
+
+    async function loadRide() {
+      try {
+        const ride = await auth.api(`/api/rides/${rideId}`);
+        document.getElementById('ride-title').textContent = `${ride.from} → ${ride.to}`;
+        document.getElementById('ride-subtitle').textContent = `${fmtDate(ride.date)} · ${ride.time}`;
+        document.getElementById('edit-btn').href = `/pages/offer-ride.html?edit=${rideId}`;
+        document.getElementById('ride-meta-chips').innerHTML = `
+          <span class="ride-meta-chip">🚗 ${ride.car}</span>
+          <span class="ride-meta-chip">💺 ${ride.availableSeats}/${ride.totalSeats} available</span>
+          <span class="ride-meta-chip">💵 ${fmtCur(ride.price)}/seat</span>
+          ${statusBadge(ride.status)}
+        `;
+        document.getElementById('ride-summary').style.display = 'block';
+      } catch (e) { toast.error('Could not load ride info'); }
+    }
+
+    async function loadBookings() {
+      showLoading(document.getElementById('bookings-container'));
+      try {
+        const bookings = await auth.api(`/api/rides/${rideId}/bookings`);
+        const pending = bookings.filter(b => b.status === 'pending').length;
+        const confirmed = bookings.filter(b => b.status === 'confirmed').length;
+        const revenue = bookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.totalPrice || 0), 0);
+        document.getElementById('stat-total').textContent = bookings.length;
+        document.getElementById('stat-pending').textContent = pending;
+        document.getElementById('stat-confirmed').textContent = confirmed;
+        document.getElementById('stat-revenue').textContent = fmtCur(revenue);
+        document.getElementById('booking-stats').style.display = 'grid';
+        renderBookings(bookings);
+      } catch (e) { toast.error('Failed to load bookings: ' + e.message); }
+    }
+
+    function renderBookings(bookings) {
+      const el = document.getElementById('bookings-container');
+      if (!bookings.length) {
+        showEmpty(el, '👥', 'No bookings yet', 'No one has booked this ride yet. Share your route to get passengers!'); return;
+      }
+      // Group by status: pending first
+      const sorted = [...bookings].sort((a, b) => {
+        const order = { pending: 0, confirmed: 1, cancelled: 2, completed: 3 };
+        return (order[a.status] || 9) - (order[b.status] || 9);
+      });
+      el.innerHTML = `<div class="rides-grid">${sorted.map(b => `
+        <div class="booking-card">
+          <div class="booking-header">
+            <div class="flex items-center gap-2">
+              <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Sora',sans-serif;font-size:1rem;color:#070d1a;flex-shrink:0">
+                ${(b.passenger?.name || 'P')[0].toUpperCase()}
+              </div>
+              <div>
+                <p class="font-bold">${b.passenger?.name || 'Passenger'}</p>
+                <p class="text-sm text-muted">${b.passenger?.email || ''}</p>
+              </div>
+            </div>
+            ${statusBadge(b.status)}
+          </div>
+          <div class="ride-meta">
+            <span class="ride-meta-chip">💺 Seat #${b.seatNumber || '?'}</span>
+            <span class="ride-meta-chip">💵 ${fmtCur(b.totalPrice)}</span>
+            <span class="ride-meta-chip">📅 ${fmtDate(b.bookingDate)}</span>
+          </div>
+          ${b.status === 'pending' ? `
+            <div class="ride-actions">
+              <button class="button primary-button btn-sm" onclick="acceptBooking('${b._id}')">✓ Accept</button>
+              <button class="button danger-button btn-sm" onclick="rejectBooking('${b._id}')">✕ Reject</button>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}</div>`;
+    }
+
+    window.acceptBooking = async (id) => {
+      try {
+        await auth.api(`/api/bookings/${id}/accept`, { method: 'PUT' });
+        toast.success('Booking accepted!'); loadBookings();
+      } catch (e) { toast.error(e.message); }
+    };
+
+    window.rejectBooking = async (id) => {
+      if (!confirm('Reject this booking?')) return;
+      try {
+        await auth.api(`/api/bookings/${id}/reject`, { method: 'PUT' });
+        toast.success('Booking rejected.'); loadBookings();
+      } catch (e) { toast.error(e.message); }
+    };
+  </script>
+</body>
+</html>

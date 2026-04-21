@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>My Bookings — RideShare</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <nav class="navbar"><div class="container">
+    <button class="brand-button" onclick="location.href='/'">RideShare</button>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+    <div class="nav-links" id="nav-links"></div>
+  </div></nav>
+
+  <div class="page-wrapper"><div class="container">
+    <div class="page-header fade-up"><h1>My Bookings</h1><p>Track all your ride bookings and payments.</p></div>
+
+    <div class="tabs fade-up delay-1">
+      <button class="tab-btn active" data-tab="all">All</button>
+      <button class="tab-btn" data-tab="pending">Pending</button>
+      <button class="tab-btn" data-tab="confirmed">Confirmed</button>
+      <button class="tab-btn" data-tab="waitlisted">Waitlisted</button>
+      <button class="tab-btn" data-tab="completed">Completed</button>
+    </div>
+
+    <div id="bookings-container" class="fade-up delay-2">
+      <div class="loading-state"><div class="spinner"></div><p>Loading bookings...</p></div>
+    </div>
+  </div></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    let currentTab = 'all';
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!auth.requireAuth('passenger')) return;
+      buildNav(auth, 'my-bookings');
+      loadBookings('all');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentTab = btn.dataset.tab;
+          loadBookings(currentTab);
+        });
+      });
+
+      // Socket listeners
+      window.onBookingUpdate = () => loadBookings(currentTab);
+      window.onRideCancelled = () => loadBookings(currentTab);
+      window.onRideStatus = () => loadBookings(currentTab);
+    });
+
+    async function loadBookings(status) {
+      showLoading(document.getElementById('bookings-container'));
+      try {
+        let url = '/api/bookings/my-bookings';
+        if (status !== 'all') url += `?status=${status}`;
+        const bookings = await auth.api(url);
+        renderBookings(bookings);
+      } catch (e) { toast.error('Failed to load bookings: ' + e.message); }
+    }
+
+    function renderBookings(bookings) {
+      const el = document.getElementById('bookings-container');
+      if (!bookings.length) {
+        showEmpty(el, '🎟️', 'No bookings yet', 'Find and book a ride to get started!',
+          '<a href="/pages/search-ride.html" class="button primary-button mt-2">Find Rides</a>');
+        return;
+      }
+
+      el.innerHTML = `<div class="rides-grid">${bookings.map(b => `
+        <div class="booking-card">
+          <div class="booking-header">
+            <div>
+              <h3 style="font-size:1.1rem">${b.ride?.from || '?'} → ${b.ride?.to || '?'}</h3>
+              <p class="text-sm text-muted mt-1">${b.ride?.date ? fmtDate(b.ride.date) : '?'} at ${b.ride?.time || '?'}</p>
+            </div>
+            <div style="text-align:right">
+              ${statusBadge(b.status)}
+              <div class="ride-price-tag mt-1">${fmtCur(b.totalPrice)}</div>
+            </div>
+          </div>
+
+          <div class="ride-meta">
+            <span class="ride-meta-chip">👤 ${b.ride?.driver?.name || 'Driver'}</span>
+            <span class="ride-meta-chip">🚗 ${b.ride?.car || 'Vehicle'}</span>
+            <span class="ride-meta-chip">💺 Seat #${b.seatNumber || '?'}</span>
+            <span class="ride-meta-chip">📅 Booked ${fmtAgo(b.bookingDate)}</span>
+          </div>
+
+          <div class="ride-actions">
+            <a href="/pages/ride-details.html?id=${b.ride?._id || ''}" class="button ghost-button btn-sm">View Ride</a>
+            ${['pending','confirmed','waitlisted'].includes(b.status) ? `
+              <button class="button danger-button btn-sm" onclick="if(confirm('Cancel booking?')) cancelBooking('${b._id}')">Cancel</button>
+            ` : ''}
+            ${b.status==='completed' && !b.passengerRated ? `
+              <button class="button primary-button btn-sm" onclick="location.href='/pages/rate.html?bookingId=${b._id}'">⭐ Rate Ride</button>
+            ` : ''}
+            ${['pending','confirmed'].includes(b.status) ? `
+              <button class="button outline-button btn-sm" onclick="location.href='/pages/chat.html?bookingId=${b._id}'">💬 Message</button>
+            ` : ''}
+          </div>
+
+          ${b.status==='waitlisted' ? `
+            <div class="alert alert-info visible mt-1">
+              <strong>You're on the waitlist.</strong> We'll notify you if a seat opens up.
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}</div>`;
+    }
+
+    async function cancelBooking(id) {
+      try {
+        await auth.api(`/api/bookings/${id}/cancel`, { method: 'PUT' });
+        toast.success('Booking cancelled.');
+        loadBookings(currentTab);
+      } catch (e) { toast.error(e.message); }
+    }
+  </script>
+</body>
+</html>
